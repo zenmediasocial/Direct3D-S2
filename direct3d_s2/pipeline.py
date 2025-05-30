@@ -62,8 +62,7 @@ class Direct3DS2Pipeline(object):
         self.sparse_image_encoder.to(device)
 
     @classmethod
-    def from_pretrained(cls, 
-                        pipeline_path):
+    def from_pretrained(cls, pipeline_path, subfolder="direct3d-s2-v-1-1"):
         
         if os.path.isdir(pipeline_path):
             config_path = os.path.join(pipeline_path, 'config.yaml')
@@ -72,11 +71,36 @@ class Direct3DS2Pipeline(object):
             model_sparse_1024_path = os.path.join(pipeline_path, 'model_sparse_1024.ckpt')
             model_refiner_path = os.path.join(pipeline_path, 'model_refiner.ckpt')
         else:
-            config_path = hf_hub_download(repo_id=pipeline_path, filename="config.yaml", repo_type="model")
-            model_dense_path = hf_hub_download(repo_id=pipeline_path, filename="model_dense.ckpt", repo_type="model")
-            model_sparse_512_path = hf_hub_download(repo_id=pipeline_path, filename="model_sparse_512.ckpt", repo_type="model")
-            model_sparse_1024_path = hf_hub_download(repo_id=pipeline_path, filename="model_sparse_1024.ckpt", repo_type="model")
-            model_refiner_path = hf_hub_download(repo_id=pipeline_path, filename="model_refiner.ckpt", repo_type="model")
+            config_path = hf_hub_download(
+                repo_id=pipeline_path, 
+                subfolder=subfolder, 
+                filename="config.yaml", 
+                repo_type="model"
+            )
+            model_dense_path = hf_hub_download(
+                repo_id=pipeline_path, 
+                subfolder=subfolder,
+                filename="model_dense.ckpt", 
+                repo_type="model"
+            )
+            model_sparse_512_path = hf_hub_download(
+                repo_id=pipeline_path, 
+                subfolder=subfolder,
+                filename="model_sparse_512.ckpt", 
+                repo_type="model"
+            )
+            model_sparse_1024_path = hf_hub_download(
+                repo_id=pipeline_path, 
+                subfolder=subfolder,
+                filename="model_sparse_1024.ckpt", 
+                repo_type="model"
+            )
+            model_refiner_path = hf_hub_download(
+                repo_id=pipeline_path, 
+                subfolder=subfolder,
+                filename="model_refiner.ckpt", 
+                repo_type="model"
+            )
 
         cfg = OmegaConf.load(config_path)
 
