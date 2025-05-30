@@ -89,10 +89,6 @@ __device__ float pointToTriangleDistance(const Point3D& queryPoint, const Point3
     // Edge vectors
     Point3D edge0 = subtract(v1, v0);
     Point3D edge1 = subtract(v2, v0);
-    /*if(inverse){
-        edge0 = subtract(v0, v1);
-        edge1 = subtract(v0, v2);
-    }*/
     if (is_identical(v0, v1) && is_identical(v0, v2))
 	    return sqrtf(squaredDistance(queryPoint, v0));
     if (is_identical(v0, v1))
@@ -134,18 +130,6 @@ __device__ float pointToTriangleDistance(const Point3D& queryPoint, const Point3
     Point3D c2 = cross(edge2, projVec2);
     if (dot(c0, c1) > 0 && dot(c1, c2) > 0 && dot(c0, c2) > 0)
         return fabsf(distanceToPlane);
-
-    /*
-    float areaTotal = dot(cross(edge0, edge1), cross(edge0, edge1));
-    float area0 = sqrtf(dot(cross(projVec1, projVec2), cross(projVec1, projVec2)));
-    float area1 = sqrtf(dot(cross(projVec2, projVec0), cross(projVec2, projVec0)));
-    float area2 = sqrtf(dot(cross(projVec0, projVec1), cross(projVec0, projVec1)));
-    
-    // If projection is inside the triangle, return distance to the plane
-    if (fabsf(areaTotal - (area0 + area1 + area2)) < 1e-6) {
-        return fabsf(distanceToPlane);
-    }
-*/
 
     // Otherwise, return the minimum distance to the triangle's edges
     float minEdgeDistance = 1e6f;

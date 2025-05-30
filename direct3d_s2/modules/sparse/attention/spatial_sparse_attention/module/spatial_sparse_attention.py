@@ -83,7 +83,7 @@ class SpatialSparseAttention(torch.nn.Module):
         x = x.replace(x.feats.view(-1, num_heads * num_dim))
         if key:
             coords = x.coords
-            intra_block_coords = coords[..., 1:] % self.kernel_stride
+            intra_block_coords = coords[..., 1:] % self.compression_block_size
             intra_block_pos = self.intra_block_pe[intra_block_coords[:, 0], intra_block_coords[:, 1], intra_block_coords[:, 2]].to(x.dtype)
             x = x.replace(x.feats + intra_block_pos)
             y = self.compression_key(x)

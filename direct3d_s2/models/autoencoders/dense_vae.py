@@ -310,11 +310,15 @@ class DenseShapeVAE(nn.Module):
                  in_channels: int = 1,
                  out_channels: int = 1,
                  use_fp16: bool = False,
-                 use_checkpoint: bool = False):
+                 use_checkpoint: bool = False,
+                 latents_scale: float = 1.0,
+                 latents_shift: float = 0.0):
 
         super().__init__()
 
         self.use_checkpoint = use_checkpoint
+        self.latents_scale = latents_scale
+        self.latents_shift = latents_shift
 
         self.encoder = SparseStructureEncoder(
             in_channels=in_channels,
@@ -362,7 +366,7 @@ class DenseShapeVAE(nn.Module):
                     latents,
                     voxel_resolution: int = 64,
                     mc_threshold: float = 0.5,
-                    return_index: bool = True):
+                    return_index: bool = False):
         x = self.decoder(latents)
         if return_index:
             outputs = []
@@ -384,13 +388,13 @@ class DenseShapeVAE(nn.Module):
         meshes = []
         for i in range(len(x)):
             occ = x[i].sigmoid()
-            occ = (occ >= 0.5).float().squeeze(0).cpu().detach().numpy()
+            occ = (occ >= 0.1).float().squeeze(0).cpu().detach().numpy()
             vertices, faces, _, _ = measure.marching_cubes(
                 occ,
                 mc_threshold,
                 method="lewiner",
             )
             vertices = vertices / voxel_resolution * 2 - 1
-            meshes.append(trimesh.Trimesh(vertices, faces[:, ::-1]))
+            meshes.append(trimesh.Trimesh(vertices, faces))
 
         return meshes

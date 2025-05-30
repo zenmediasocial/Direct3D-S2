@@ -26,8 +26,6 @@ class SparseDiT(nn.Module):
         topk: int = 8,
         compression_version: str = 'v2',
         mlp_ratio: float = 4,
-        num_io_res_blocks: int = 2,
-        io_block_channels: List[int] = None,
         pe_mode: Literal["ape", "rope"] = "ape",
         use_fp16: bool = False,
         use_checkpoint: bool = False,
@@ -48,8 +46,6 @@ class SparseDiT(nn.Module):
         self.num_blocks = num_blocks
         self.num_heads = num_heads or model_channels // num_head_channels
         self.mlp_ratio = mlp_ratio
-        self.num_io_res_blocks = num_io_res_blocks
-        self.io_block_channels = io_block_channels
         self.pe_mode = pe_mode
         self.use_fp16 = use_fp16
         self.use_checkpoint = use_checkpoint
@@ -59,6 +55,8 @@ class SparseDiT(nn.Module):
         self.dtype = torch.float16 if use_fp16 else torch.float32
         self.sparse_conditions = sparse_conditions
         self.factor = factor
+        self.compression_block_size = compression_block_size
+        self.selection_block_size = selection_block_size
 
         self.t_embedder = TimestepEmbedder(model_channels)
         if share_mod:
@@ -117,9 +115,7 @@ class SparseDiT(nn.Module):
         """
         Convert the torso of the model to float16.
         """
-        self.input_blocks.apply(convert_module_to_f16)
         self.blocks.apply(convert_module_to_f16)
-        self.out_blocks.apply(convert_module_to_f16)
 
     def convert_to_fp32(self) -> None:
         """
@@ -166,10 +162,10 @@ class SparseDiT(nn.Module):
         if self.sparse_conditions:
             cond = self.cond_proj(cond)
             cond = cond + self.pos_embedder_cond(cond.coords[:, 1:]).type(self.dtype)
-        
         if self.pe_mode == "ape":
             h = h + self.pos_embedder(h.coords[:, 1:], factor=self.factor).type(self.dtype)
         for block in self.blocks:
+            print(h.feats.sum(), 'h')
             h = block(h, t_emb, cond)
 
         h = h.replace(F.layer_norm(h.feats, h.feats.shape[-1:]))

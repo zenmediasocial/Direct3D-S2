@@ -16,19 +16,19 @@ def normalize_mesh(mesh, scale=0.95):
     min_coords, max_coords = vertices.min(axis=0), vertices.max(axis=0)
     dxyz = max_coords - min_coords
     dist = max(dxyz)
-    mesh_scale = scale / dist
+    mesh_scale = 2.0 * scale / dist
     mesh_offset = -(min_coords + max_coords) / 2
     vertices = (vertices + mesh_offset) * mesh_scale
-    mesh.vertices = mesh
+    mesh.vertices = vertices
     return mesh
 
 def mesh2index(mesh, size=1024, factor=8):
-    vertices = torch.Tensor(vertices).float().cuda() * 0.5
-    faces = torch.Tensor(faces).int().cuda()
+    vertices = torch.Tensor(mesh.vertices).float().cuda() * 0.5
+    faces = torch.Tensor(mesh.faces).int().cuda()
     sdf = compute_valid_udf(vertices, faces, dim=size, threshold=4.0)
     sdf = sdf.reshape(size, size, size).unsqueeze(0)
 
     sparse_index = (sdf < 4/size).nonzero()
     sparse_index[..., 1:] = sparse_index[..., 1:] // factor
-    latents_index = torch.unique(sparse_index, dim=0)
-    return latents_index
+    latent_index = torch.unique(sparse_index, dim=0)
+    return latent_index

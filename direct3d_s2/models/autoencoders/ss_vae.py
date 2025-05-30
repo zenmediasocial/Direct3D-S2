@@ -27,12 +27,17 @@ class SparseSDFVAE(nn.Module):
                  num_head_channels_decoder: int = 64,
                  out_channels: int = 1,
                  use_fp16: bool = False,
-                 use_checkpoint: bool = False):
+                 use_checkpoint: bool = False,
+                 chunk_size: int = 1,
+                 latents_scale: float = 1.0,
+                 latents_shift: float = 0.0):
 
         super().__init__()
 
         self.use_checkpoint = use_checkpoint
         self.resolution = resolution
+        self.latents_scale = latents_scale
+        self.latents_shift = latents_shift
 
         self.encoder = SparseSDFEncoder(
             resolution=resolution,
@@ -56,6 +61,7 @@ class SparseSDFVAE(nn.Module):
             out_channels=out_channels,
             use_fp16=use_fp16,
             use_checkpoint=use_checkpoint,
+            chunk_size=chunk_size,
         )
         self.embed_dim = embed_dim
 
@@ -110,7 +116,7 @@ class SparseSDFVAE(nn.Module):
         meshes = []
         for i in range(batch_size):
             idx = sparse_index[..., 0] == i
-            sparse_sdf_i, sparse_index_i = sparse_sdf[idx].squeeze(-1).cpu(),  sparse_index[idx][..., 1:].cpu()
+            sparse_sdf_i, sparse_index_i = sparse_sdf[idx].squeeze(-1).cpu(),  sparse_index[idx][..., 1:].detach().cpu()
             sdf = torch.ones((voxel_resolution, voxel_resolution, voxel_resolution))
             sdf[sparse_index_i[..., 0], sparse_index_i[..., 1], sparse_index_i[..., 2]] = sparse_sdf_i
             vertices, faces, _, _ = measure.marching_cubes(
@@ -119,6 +125,6 @@ class SparseSDFVAE(nn.Module):
                 method="lewiner",
             )
             vertices = vertices / voxel_resolution * 2 - 1
-            meshes.append(trimesh.Trimesh(vertices, faces[:, ::-1]))
+            meshes.append(trimesh.Trimesh(vertices, faces))
 
         return meshes

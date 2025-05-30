@@ -173,7 +173,6 @@ class ModulatedSparseTransformerCrossBlock(nn.Module):
         for i in range(len(layouts)):
             ada_r1.append(feats_h[layouts[i]] * (1 + scale_msa[i:i+1]) + shift_msa[i:i+1])
         h = h.replace(torch.cat(ada_r1, dim=0))
-
         h = self.self_attn(h)
 
         feats_h = h.feats
@@ -195,7 +194,6 @@ class ModulatedSparseTransformerCrossBlock(nn.Module):
         for i in range(len(layouts)):
             ada_r3.append(feats_h[layouts[i]] * (1 + scale_mlp[i:i+1]) + shift_mlp[i:i+1])
         h = h.replace(torch.cat(ada_r3, dim=0))
-
         h = self.mlp(h)
 
         feats_h = h.feats

@@ -34,13 +34,6 @@ class SparseDownsample(nn.Module):
         code = sum([c * o for c, o in zip(coord, OFFSET)])
         code, idx = code.unique(return_inverse=True)
 
-        # new_feats = torch.scatter_reduce(
-        #     torch.zeros(code.shape[0], input.feats.shape[1], device=input.feats.device, dtype=input.feats.dtype),
-        #     dim=0,
-        #     index=idx.unsqueeze(1).expand(-1, input.feats.shape[1]),
-        #     src=input.feats,
-        #     reduce=self.mode,
-        # )
         #### using fp16 could cause overflow when factor is large ######
         dtype = input.feats.dtype
         new_feats = torch.scatter_reduce(

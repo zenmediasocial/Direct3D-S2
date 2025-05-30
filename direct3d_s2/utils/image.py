@@ -56,42 +56,40 @@ def apply_joint_transforms(rgb, mask, img_size, img_aug=True, test=True):
 
 def crop_recenter(image_no_bg, thereshold=100):
     image_no_bg_np = np.array(image_no_bg)
-    if image_no_bg_np.shape[2] == 3:
-        return image_no_bg
     mask = (image_no_bg_np[..., -1]).astype(np.uint8)
     mask_bin = mask > thereshold
     
     H, W = image_no_bg_np.shape[:2]
-    valid_pixels = mask_bin.astype(np.float32).nonzero()
+    
+    valid_pixels = mask_bin.astype(np.float32).nonzero() # [N, 2]
     if np.sum(mask_bin) < (H*W) * 0.001:
-        min_h = 0
+        min_h =0
         max_h = H - 1
         min_w = 0
         max_w = W -1
     else:
         min_h, max_h = valid_pixels[0].min(), valid_pixels[0].max()
         min_w, max_w = valid_pixels[1].min(), valid_pixels[1].max()
-    
+        
     if min_h < 0:
         min_h = 0
     if min_w < 0:
         min_w = 0
     if max_h > H:
-        max_h = H - 1
+        max_h = H 
     if max_w > W:
-        max_w = W - 1
+        max_w = W
 
     image_no_bg_np = image_no_bg_np[min_h:max_h+1, min_w:max_w+1]
-    image_no_bg = Image.fromarray(image_no_bg_np)
-    return image_no_bg
+    return image_no_bg_np
 
-def preprocess_image(image):
+def preprocess_image(img):
 
-    if isinstance(image, str):
-        image = Image.open(image)
-        image = np.array(image)
-    elif isinstance(image, Image.Image):
-        image = np.array(image)
+    if isinstance(img, str):
+        img = Image.open(img)
+        img = np.array(img)
+    elif isinstance(img, Image.Image):
+        img = np.array(img)
 
     if img.shape[-1] == 3:
         mask = np.ones_like(img[..., 0:1])
@@ -106,6 +104,6 @@ def preprocess_image(image):
 
     img, mask = apply_joint_transforms(img, mask, img_size=518, 
             img_aug=False, test=True)
-    img = torch.cat([img, mask], dim=-1)
+    img = torch.cat([img, mask], dim=0)
     return img
     

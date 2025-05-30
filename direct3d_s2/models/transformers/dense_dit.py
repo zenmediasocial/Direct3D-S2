@@ -52,7 +52,7 @@ class TimestepEmbedder(nn.Module):
         return t_emb
 
 
-class SparseStructureFlowModel(nn.Module):
+class DenseDiT(nn.Module):
     def __init__(
         self,
         resolution: int,
@@ -71,6 +71,7 @@ class SparseStructureFlowModel(nn.Module):
         share_mod: bool = False,
         qk_rms_norm: bool = False,
         qk_rms_norm_cross: bool = False,
+        latent_shape: list = [8, 16, 16, 16],
     ):
         super().__init__()
         self.resolution = resolution
@@ -89,6 +90,7 @@ class SparseStructureFlowModel(nn.Module):
         self.qk_rms_norm = qk_rms_norm
         self.qk_rms_norm_cross = qk_rms_norm_cross
         self.dtype = torch.float16 if use_fp16 else torch.float32
+        self.latent_shape = latent_shape
 
         self.t_embedder = TimestepEmbedder(model_channels)
         if share_mod:
@@ -179,7 +181,6 @@ class SparseStructureFlowModel(nn.Module):
 
         h = patchify(x, self.patch_size)
         h = h.view(*h.shape[:2], -1).permute(0, 2, 1).contiguous()
-
         h = self.input_layer(h)
         h = h + self.pos_emb[None]
         t_emb = self.t_embedder(t)

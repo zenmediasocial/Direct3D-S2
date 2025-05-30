@@ -15,6 +15,7 @@ class DinoEncoder(nn.Module):
         super().__init__()
 
         dino_model = torch.hub.load(model, version, pretrained=True, source='local', force_reload=True)
+        # dino_model = torch.hub.load(model, version, pretrained=True)
         dino_model = dino_model.eval()
         self.encoder = dino_model
         self.transform = transforms.Compose(

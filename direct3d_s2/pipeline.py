@@ -12,9 +12,19 @@ from direct3d_s2.utils import (
     instantiate_from_config, 
     preprocess_image, 
     sort_block, 
-    extract_tokens_and_coords
+    extract_tokens_and_coords,
+    normalize_mesh,
+    mesh2index,
 )
 
+def compute_valid_udf(vertices, faces, dim=512, threshold=8.0):
+    if not faces.is_cuda or not vertices.is_cuda:
+        raise ValueError("Both maze and visited tensors must be CUDA tensors")
+    udf = torch.zeros(dim**3,device=vertices.device).int() + 10000000
+    n_faces = faces.shape[0]
+    import udf_extension
+    udf_extension.compute_valid_udf(vertices, faces, udf, n_faces, dim, threshold)
+    return udf.float()/10000000.
 
 class Direct3DS2Pipeline(object):
 
@@ -24,7 +34,7 @@ class Direct3DS2Pipeline(object):
                  sparse_vae_512,
                  sparse_dit_512,
                  sparse_vae_1024,
-                 sparce_dit_1024,
+                 sparse_dit_1024,
                  refiner,
                  dense_image_encoder,
                  sparse_image_encoder,
@@ -38,7 +48,7 @@ class Direct3DS2Pipeline(object):
         self.sparse_vae_512 = sparse_vae_512
         self.sparse_dit_512 = sparse_dit_512
         self.sparse_vae_1024 = sparse_vae_1024
-        self.sparce_dit_1024 = sparce_dit_1024
+        self.sparse_dit_1024 = sparse_dit_1024
         self.refiner = refiner
         self.dense_image_encoder = dense_image_encoder
         self.sparse_image_encoder = sparse_image_encoder
@@ -54,6 +64,7 @@ class Direct3DS2Pipeline(object):
         self.sparse_vae_512.to(device)
         self.sparse_dit_512.to(device)
         self.sparse_vae_1024.to(device)
+        self.sparse_dit_1024.to(device)
         self.refiner.to(device)
         self.dense_image_encoder.to(device)
         self.sparse_image_encoder.to(device)
@@ -71,33 +82,40 @@ class Direct3DS2Pipeline(object):
         else:
             config_path = hf_hub_download(repo_id=pipeline_path, filename="config.yaml", repo_type="model")
             model_dense_path = hf_hub_download(repo_id=pipeline_path, filename="model_dense.ckpt", repo_type="model")
-            model_sparse_512_path = hf_hub_download(repo_id=pipeline_path, filename="model_sparse_512_path.ckpt", repo_type="model")
-            model_sparse_1024_path = hf_hub_download(repo_id=pipeline_path, filename="model_sparse_1024_path.ckpt", repo_type="model")
-            model_refiner_path = hf_hub_download(repo_id=pipeline_path, filename="model_refiner_path.ckpt", repo_type="model")
+            model_sparse_512_path = hf_hub_download(repo_id=pipeline_path, filename="model_sparse_512.ckpt", repo_type="model")
+            model_sparse_1024_path = hf_hub_download(repo_id=pipeline_path, filename="model_sparse_1024.ckpt", repo_type="model")
+            model_refiner_path = hf_hub_download(repo_id=pipeline_path, filename="model_refiner.ckpt", repo_type="model")
 
         cfg = OmegaConf.load(config_path)
 
-        state_dict_dense = torch.load(model_dense_path, map_location='cpu')
+        state_dict_dense = torch.load(model_dense_path, map_location='cpu', weights_only=True)
         dense_vae = instantiate_from_config(cfg.dense_vae)
         dense_vae.load_state_dict(state_dict_dense["vae"], strict=True)
+        dense_vae.eval()
         dense_dit = instantiate_from_config(cfg.dense_dit)
         dense_dit.load_state_dict(state_dict_dense["dit"], strict=True)
+        dense_dit.eval()
 
-        state_dict_sparse_512 = torch.load(model_sparse_512_path, map_location='cpu')
+        state_dict_sparse_512 = torch.load(model_sparse_512_path, map_location='cpu', weights_only=True)
         sparse_vae_512 = instantiate_from_config(cfg.sparse_vae_512)
         sparse_vae_512.load_state_dict(state_dict_sparse_512["vae"], strict=True)
+        sparse_vae_512.eval()
         sparse_dit_512 = instantiate_from_config(cfg.sparse_dit_512)
         sparse_dit_512.load_state_dict(state_dict_sparse_512["dit"], strict=True)
+        sparse_dit_512.eval()
 
-        state_dict_sparse_1024 = torch.load(model_sparse_1024_path, map_location='cpu')
+        state_dict_sparse_1024 = torch.load(model_sparse_1024_path, map_location='cpu', weights_only=True)
         sparse_vae_1024 = instantiate_from_config(cfg.sparse_vae_1024)
         sparse_vae_1024.load_state_dict(state_dict_sparse_1024["vae"], strict=True)
+        sparse_vae_1024.eval()
         sparse_dit_1024 = instantiate_from_config(cfg.sparse_dit_1024)
         sparse_dit_1024.load_state_dict(state_dict_sparse_512["dit"], strict=True)
+        sparse_dit_1024.eval()
 
-        state_dict_refiner = torch.load(model_refiner_path, map_location='cpu')
+        state_dict_refiner = torch.load(model_refiner_path, map_location='cpu', weights_only=True)
         refiner = instantiate_from_config(cfg.refiner)
         refiner.load_state_dict(state_dict_refiner["refiner"], strict=True)
+        refiner.eval()
 
         dense_image_encoder = instantiate_from_config(cfg.dense_image_encoder)
         sparse_image_encoder = instantiate_from_config(cfg.sparse_image_encoder)
@@ -118,6 +136,7 @@ class Direct3DS2Pipeline(object):
             dense_scheduler=dense_scheduler,
             sparse_scheduler_512=sparse_scheduler_512,
             sparse_scheduler_1024=sparse_scheduler_1024,
+            refiner=refiner,
         )
 
     def preprocess(self, image):
@@ -143,9 +162,9 @@ class Direct3DS2Pipeline(object):
     def encode_image(self, image: torch.Tensor, conditioner: Any, 
                      do_classifier_free_guidance: bool = True, use_mask: bool = False):
         if use_mask:
-            cond = conditioner(image[..., :3], image[..., 3:])
+            cond = conditioner(image[:, :3], image[:, 3:])
         else:
-            cond = conditioner(image[..., :3])
+            cond = conditioner(image[:, :3])
 
         if isinstance(cond, tuple):
             cond, cond_mask = cond
@@ -181,8 +200,12 @@ class Direct3DS2Pipeline(object):
             mc_threshold: float = 0.0):
         
         do_classifier_free_guidance = guidance_scale > 0
-        cond, uncond = self.encode_image(image, conditioner, do_classifier_free_guidance, 
-                                 dit.get('sparse_conditions', False))
+        if mode == 'dense':
+            sparse_conditions = False
+        else:
+            sparse_conditions = dit.sparse_conditions
+        cond, uncond = self.encode_image(image, conditioner, 
+                                         do_classifier_free_guidance, sparse_conditions)
         batch_size = cond.shape[0]
 
         if mode == 'dense':
@@ -205,7 +228,7 @@ class Direct3DS2Pipeline(object):
             if mode == 'dense':
                 x_input = latent_model_input
             elif mode in ['sparse512', 'sparse1024']:
-                x_input = sp.SparseTensor(latent_model_input, latent_index)
+                x_input = sp.SparseTensor(latent_model_input, latent_index.int())
 
             diffusion_inputs = {
                 "x": x_input,
@@ -214,17 +237,27 @@ class Direct3DS2Pipeline(object):
             }
 
             noise_pred_cond = dit(**diffusion_inputs)
+            if mode != 'dense':
+                noise_pred_cond = noise_pred_cond.feats
 
             if do_classifier_free_guidance:
                 diffusion_inputs["cond"] = uncond
                 noise_pred_uncond = dit(**diffusion_inputs)
+                if mode != 'dense':
+                    noise_pred_uncond = noise_pred_uncond.feats
                 noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_cond - noise_pred_uncond)
             else:
                 noise_pred = noise_pred_cond
             
             latents = scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
-            
         latents = 1. / vae.latents_scale * latents + vae.latents_shift
+        
+        if mode != 'dense':
+            latents = sp.SparseTensor(latents, latent_index.int())
+
+        # if mode == 'sparse1024':
+        #     data = torch.load('/opt/ml/input/data/CFS/wushuang/Direct3D/data1.pt')
+        #     latents = sp.SparseTensor(data['x_feats'].cuda(), data['x_coords'].cuda())
 
         decoder_inputs = {
             "latents": latents,
@@ -234,11 +267,13 @@ class Direct3DS2Pipeline(object):
             decoder_inputs['return_index'] = True
         elif remove_interior:
             decoder_inputs['return_feat'] = True
+        if mode == 'sparse1024':
+            decoder_inputs['voxel_resolution'] = 1024
 
         outputs = vae.decode_mesh(**decoder_inputs)
 
         if remove_interior:
-            outputs = self.refiner.run(outputs)
+            outputs = self.refiner.run(*outputs, mc_threshold=mc_threshold*2.0)
 
         return outputs
     
@@ -247,27 +282,48 @@ class Direct3DS2Pipeline(object):
         self,
         image: Union[str, List[str], Image.Image, List[Image.Image]] = None,
         sdf_resolution: int = 1024,
-        dense_sampler_params: dict = {'num_inference_steps': 30, 'guidance_scale': 7.0},
+        dense_sampler_params: dict = {'num_inference_steps': 50, 'guidance_scale': 7.0},
         sparse_512_sampler_params: dict = {'num_inference_steps': 30, 'guidance_scale': 7.0},
         sparse_1024_sampler_params: dict = {'num_inference_steps': 15, 'guidance_scale': 7.0},
         generator: Optional[torch.Generator] = None,
-        mc_threshold: float = -2.0):
+        mc_threshold: float = 0.2):
 
         image = self.prepare_image(image)
         
-        latent_index = self.inference(image, self.dense_vae, self.dense_dit, self.dense_image_encoder,
-                                       self.dense_scheduler, generator=generator, mode='dense', mc_threshold=0.1, **dense_sampler_params)
+        
+        with torch.amp.autocast("cuda"):
+            latent_index = self.inference(image, self.dense_vae, self.dense_dit, self.dense_image_encoder,
+                                        self.dense_scheduler, generator=generator, mode='dense', mc_threshold=0.1, **dense_sampler_params)[0]
         
         latent_index = sort_block(latent_index, self.sparse_dit_512.selection_block_size)
+
+        torch.cuda.empty_cache()
 
         if sdf_resolution == 512:
             remove_interior = False
         else:
             remove_interior = True
 
-        mesh = self.inference(image, self.sparse_vae_512, self.sparse_dit_512, self.sparse_image_encoder,
-                              self.sparse_scheduler_512, generator=generator, mode='sparse512',
-                              mc_threshold=mc_threshold, latent_index=latent_index, remove_interior=remove_interior, **sparse_512_sampler_params)
+        with torch.amp.autocast("cuda"):
+            mesh = self.inference(image, self.sparse_vae_512, self.sparse_dit_512, 
+                                  self.sparse_image_encoder, self.sparse_scheduler_512, 
+                                  generator=generator, mode='sparse512', 
+                                  mc_threshold=mc_threshold, latent_index=latent_index, 
+                                  remove_interior=remove_interior, **sparse_512_sampler_params)[0]
+        """
+        import trimesh
+        mesh = trimesh.load('refine.obj')
+        """
+        if sdf_resolution == 1024:
+            mesh = normalize_mesh(mesh)
+            latent_index = mesh2index(mesh, size=1024, factor=8)
+            latent_index = sort_block(latent_index, self.sparse_dit_1024.selection_block_size)
+            with torch.amp.autocast("cuda"):
+                mesh = self.inference(image, self.sparse_vae_1024, self.sparse_dit_1024, 
+                                  self.sparse_image_encoder, self.sparse_scheduler_1024, 
+                                  generator=generator, mode='sparse1024', 
+                                  mc_threshold=mc_threshold, latent_index=latent_index, 
+                                  **sparse_1024_sampler_params)[0]
 
         outputs = {"mesh": mesh}
 
