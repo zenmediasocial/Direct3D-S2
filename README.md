@@ -24,6 +24,12 @@
 
 Generating high‑resolution 3D shapes using volumetric representations such as Signed Distance Functions (SDFs) presents substantial computational and memory challenges. We introduce <strong class="has-text-weight-bold">Direct3D‑S2</strong>, a scalable 3D generation framework based on sparse volumes that achieves superior output quality with dramatically reduced training costs. Our key innovation is the <strong class="has-text-weight-bold">Spatial Sparse Attention (SSA)</strong> mechanism, which greatly enhances the efficiency of Diffusion Transformer (DiT) computations on sparse volumetric data. SSA allows the model to effectively process large token sets within sparse volumes, yielding a <em>3.9&times;</em> speed‑up in the forward pass and a <em>9.6&times;</em> speed‑up in the backward pass. The framework also includes a variational autoencoder (VAE) that maintains a consistent sparse volumetric format across input, latent, and output stages. Compared with prior 3D VAEs that rely on heterogeneous representations, this unified design markedly improves training efficiency and stability. Trained on publicly available datasets, <strong class="has-text-weight-bold">Direct3D‑S2</strong> not only surpasses state‑of‑the‑art methods in generation quality and efficiency, but also enables <strong class="has-text-weight-bold">training at 1024<sup>3</sup>  resolution with just 8 GPUs</strong>—a task that previously required at least 32 GPUs for 256<sup>3</sup> volumetric training—making gigascale 3D generation both practical and accessible.
 
+## 🌟 Highlight
+
+- **Gigascale 3D Generation**: Direct3D-S2 enables training at 1024<sup>3</sup> resolution with only 8 GPUs.
+- **Spatial Sparse Attention (SSA)**: A novel attention mechanism designed for sparse volumetric data, enabling efficient processing of large token sets.
+- **Unified Sparse VAE**: A variational autoencoder that maintains a consistent sparse volumetric format across input, latent, and output stages, improving training efficiency and stability.
+
 ## 🚀 Getting Started
 
 ### Installation
@@ -34,8 +40,6 @@ git clone https://github.com/DreamTechAI/Direct3D-S2.git
 cd Direct3D-S2
 
 pip install -r requirements.txt
-
-pip install third_part/voxelize/
 
 pip install -e .
 
@@ -81,6 +85,10 @@ Thanks to the following repos for their great work, which helps us a lot in the 
 - [SparseFlex](https://github.com/VAST-AI-Research/TripoSF)
 - [Objaverse](https://objaverse.allenai.org/)
 - [diffusers](https://github.com/huggingface/diffusers)
+
+## 📄 License
+
+Direct3D-S2 is released under the MIT License. See [LICENSE](LICENSE) for details.
 
 ## 📖 Citation
 
