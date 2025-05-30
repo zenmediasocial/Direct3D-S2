@@ -15,4 +15,4 @@ utils3d
 pyvista
 igraph
 git+https://github.com/mit-han-lab/torchsparse.git
-third_part/voxelize/
+third_party/voxelize/
