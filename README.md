@@ -16,6 +16,7 @@
 
 ## ✨ News
 
+- May 30, 2025: 🤯 We have released both v1.0 and v1.1. The new model offers even greater speed compared to FlashAttention-2, with **12.2×** faster forward pass and **19.7×** faster backward pass, leading to nearly **2×** speedup in inference speedup over v1.0.
 - May 30, 2025: 🔨 Release inference code and model.
 - May 26, 2025: 🎁 Release live demo on 🤗 [Hugging Face](https://huggingface.co/spaces/wushuang98/Direct3D-S2-v1.0-demo).
 - May 26, 2025: 🚀 Release paper and project page.
@@ -48,33 +49,15 @@ pip install -e .
 ### Usage
 
 ```python
-import trimesh
-import numpy as np 
 from direct3d_s2.pipeline import Direct3DS2Pipeline
-from direct3d_s2.utils.fix_hole import postprocess_mesh
-
-pipe = Direct3DS2Pipeline.from_pretrained('weights/v1.1')
-pipe.to("cuda:0")
-
-mesh = pipe('assets/test/6.png', sdf_resolution=1024, mc_threshold=0.2)["mesh"]
-
-simplify_ratio = 0.95
-filled_mesh = postprocess_mesh(
-    vertices=mesh.vertices,
-    faces=mesh.faces,
-    simplify=True,
-    simplify_ratio=simplify_ratio,
-    fill_holes=False,
-    fill_holes_max_hole_size=0.04,
-    fill_holes_max_hole_nbe=int(250 * np.sqrt(1-simplify_ratio)),
-    fill_holes_resolution=1024,
-    fill_holes_num_views=1000,
-    debug=False,
-    verbose=True,
-)
-mesh = trimesh.Trimesh(vertices=filled_mesh[0], faces=filled_mesh[1])
-
-mesh.export('monster.obj')
+pipeline = Direct3DS2Pipeline.from_pretrained('weights/v1.1')
+pipeline.to("cuda:0")
+mesh = pipeline(
+  'assets/test/13.png', 
+  sdf_resolution=1024, # 512 or 1024
+  remesh=False, # Switch to True if you need to reduce the number of triangles.
+)["mesh"]
+mesh.export('output.obj')
 ```
 
 ## 🤗 Acknowledgements
@@ -83,7 +66,7 @@ Thanks to the following repos for their great work, which helps us a lot in the 
 
 - [Trellis](https://github.com/microsoft/TRELLIS)
 - [SparseFlex](https://github.com/VAST-AI-Research/TripoSF)
-- [Objaverse](https://objaverse.allenai.org/)
+- [native-sparse-attention-triton](https://github.com/XunhaoLai/native-sparse-attention-triton)
 - [diffusers](https://github.com/huggingface/diffusers)
 
 ## 📄 License

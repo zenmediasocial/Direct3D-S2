@@ -5,3 +5,6 @@
 weights
 *.so
 *.obj
+output
+outputs
+.gradio
