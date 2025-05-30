@@ -65,7 +65,7 @@ def image2mesh(
     uid = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     image.save(os.path.join(output_path, uid + '.png'))
 
-    pipe = Direct3DS2Pipeline.from_pretrained('weights/v1.1')
+    pipe = Direct3DS2Pipeline.from_pretrained('wushuang98/Direct3D-S2', subfolder="direct3d-s2-v-1-1")
     pipe.to("cuda:0")
 
     mesh = pipe(
