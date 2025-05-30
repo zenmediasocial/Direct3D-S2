@@ -16,9 +16,9 @@
 
 ## ✨ News
 
-- Feb 11, 2025: 🔨 We are working on the Gradio demo and will release it soon!
-- Feb 11, 2025: 🎁 Enjoy our improved version of Direct3D with high quality geometry and texture at [https://www.neural4d.com](https://www.neural4d.com/).
-- Feb 11, 2025: 🚀 Release inference code of Direct3D and the pretrained models are available at 🤗 [Hugging Face](https://huggingface.co/DreamTechAI/Direct3D/tree/main).
+- May 30, 2025: 🔨 Release inference code and model.
+- May 26, 2025: 🎁 Release live demo on 🤗 [Hugging Face](https://huggingface.co/spaces/wushuang98/Direct3D-S2-v1.0-demo).
+- May 26, 2025: 🚀 Release paper and project page.
 
 ## 📝 Abstract
 
@@ -29,37 +29,56 @@ Generating high‑resolution 3D shapes using volumetric representations such as 
 ### Installation
 
 ```sh
-git clone https://github.com/DreamTechAI/Direct3D.git
+git clone https://github.com/DreamTechAI/Direct3D-S2.git
 
-cd Direct3D
+cd Direct3D-S2
 
 pip install -r requirements.txt
 
+pip install third_part/voxelize/
+
 pip install -e .
+
 ```
 
 ### Usage
 
 ```python
-from direct3d.pipeline import Direct3dPipeline
-pipeline = Direct3dPipeline.from_pretrained("DreamTechAI/Direct3D")
-pipeline.to("cuda")
-mesh = pipeline(
-    "assets/devil.png",
-    remove_background=False, # set to True if the background of the image needs to be removed
-    mc_threshold=-1.0,
-    guidance_scale=4.0,
-    num_inference_steps=50,
-)["meshes"][0]
-mesh.export("output.obj")
+import trimesh
+import numpy as np 
+from direct3d_s2.pipeline import Direct3DS2Pipeline
+from direct3d_s2.utils.fix_hole import postprocess_mesh
+
+pipe = Direct3DS2Pipeline.from_pretrained('weights/v1.1')
+pipe.to("cuda:0")
+
+mesh = pipe('assets/test/6.png', sdf_resolution=1024, mc_threshold=0.2)["mesh"]
+
+simplify_ratio = 0.95
+filled_mesh = postprocess_mesh(
+    vertices=mesh.vertices,
+    faces=mesh.faces,
+    simplify=True,
+    simplify_ratio=simplify_ratio,
+    fill_holes=False,
+    fill_holes_max_hole_size=0.04,
+    fill_holes_max_hole_nbe=int(250 * np.sqrt(1-simplify_ratio)),
+    fill_holes_resolution=1024,
+    fill_holes_num_views=1000,
+    debug=False,
+    verbose=True,
+)
+mesh = trimesh.Trimesh(vertices=filled_mesh[0], faces=filled_mesh[1])
+
+mesh.export('monster.obj')
 ```
 
 ## 🤗 Acknowledgements
 
-Thanks to the following repos for their great work, which helps us a lot in the development of Direct3D:
+Thanks to the following repos for their great work, which helps us a lot in the development of Direct3D-S2:
 
-- [3DShape2VecSet](https://github.com/1zb/3DShape2VecSet/tree/master)
-- [Michelangelo](https://github.com/NeuralCarver/Michelangelo)
+- [Trellis](https://github.com/microsoft/TRELLIS)
+- [SparseFlex](https://github.com/VAST-AI-Research/TripoSF)
 - [Objaverse](https://objaverse.allenai.org/)
 - [diffusers](https://github.com/huggingface/diffusers)
 
@@ -75,5 +94,3 @@ If you find our work useful, please consider citing our paper:
   year={2025}
 }
 ```
-
----
