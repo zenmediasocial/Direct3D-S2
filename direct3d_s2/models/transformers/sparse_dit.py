@@ -165,10 +165,8 @@ class SparseDiT(nn.Module):
         if self.pe_mode == "ape":
             h = h + self.pos_embedder(h.coords[:, 1:], factor=self.factor).type(self.dtype)
         for block in self.blocks:
-            print(h.feats.sum(), 'h')
             h = block(h, t_emb, cond)
 
         h = h.replace(F.layer_norm(h.feats, h.feats.shape[-1:]))
         h = self.out_layer(h.type(x.dtype))
-
         return h

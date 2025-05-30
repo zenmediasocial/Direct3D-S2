@@ -3,33 +3,21 @@ import random
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 from ...modules.utils import zero_module, convert_module_to_f16, convert_module_to_f32
 from ...modules import sparse as sp
 from .base import SparseTransformerBase
 
 
 class SparseSubdivideBlock3d(nn.Module):
-    """
-    A 3D subdivide block that can subdivide the sparse tensor.
 
-    Args:
-        channels: channels in the inputs and outputs.
-        out_channels: if specified, the number of output channels.
-        num_groups: the number of groups for the group norm.
-    """
     def __init__(
         self,
         channels: int,
-        resolution: int,
         out_channels: Optional[int] = None,
-        num_groups: int = 32,
         use_checkpoint: bool = False,
     ):
         super().__init__()
         self.channels = channels
-        self.resolution = resolution
-        self.out_resolution = resolution * 2
         self.out_channels = out_channels or channels
         self.use_checkpoint = use_checkpoint
 
@@ -42,19 +30,10 @@ class SparseSubdivideBlock3d(nn.Module):
         
         self.out_layers = nn.Sequential(
             sp.SparseConv3d(self.out_channels, self.out_channels, 3, padding=1),
-            # sp.SparseGroupNorm32(num_groups, self.out_channels),
             sp.SparseSiLU(),
         )
         
     def _forward(self, x: sp.SparseTensor) -> sp.SparseTensor:
-        """
-        Apply the block to a Tensor, conditioned on a timestep embedding.
-
-        Args:
-            x: an [N x C x ...] Tensor of features.
-        Returns:
-            an [N x C x ...] Tensor of outputs.
-        """
         h = self.act_layers(x)
         h = self.sub(h)
         h = self.out_layers(h)
@@ -65,46 +44,6 @@ class SparseSubdivideBlock3d(nn.Module):
             return torch.utils.checkpoint.checkpoint(self._forward, x, use_reentrant=False)
         else:
             return self._forward(x)
-    
-    
-class SparseUpBlock3d(nn.Module):
-    """
-    A 3D subdivide block that can subdivide the sparse tensor.
-
-    Args:
-        channels: channels in the inputs and outputs.
-        out_channels: if specified, the number of output channels.
-        num_groups: the number of groups for the group norm.
-    """
-    def __init__(
-        self,
-        channels: int,
-        resolution: int,
-        out_channels: Optional[int] = None,
-        num_groups: int = 32
-    ):
-        super().__init__()
-        self.channels = channels
-        self.resolution = resolution
-        self.out_resolution = resolution * 2
-        self.out_channels = out_channels or channels
-        self.out_layers = nn.Sequential(
-            sp.SparseConvTranspose3d(channels, self.out_channels, 3, indice_key=f"res_{self.resolution}"),
-            # sp.SparseGroupNorm32(num_groups, self.out_channels),
-            sp.SparseSiLU(),
-        )
-        
-    def forward(self, x: sp.SparseTensor) -> sp.SparseTensor:
-        """
-        Apply the block to a Tensor, conditioned on a timestep embedding.
-
-        Args:
-            x: an [N x C x ...] Tensor of features.
-        Returns:
-            an [N x C x ...] Tensor of outputs.
-        """
-        h = self.out_layers(x)
-        return h
 
 
 class SparseSDFDecoder(SparseTransformerBase):
@@ -144,22 +83,20 @@ class SparseSDFDecoder(SparseTransformerBase):
         self.resolution = resolution
         self.rep_config = representation_config
         self.out_channels = out_channels
+        self.chunk_size = chunk_size
         self.upsample = nn.ModuleList([
             SparseSubdivideBlock3d(
                 channels=model_channels,
-                resolution=resolution,
                 out_channels=model_channels // 4,
                 use_checkpoint=use_checkpoint,
             ),
             SparseSubdivideBlock3d(
                 channels=model_channels // 4,
-                resolution=resolution * 2,
                 out_channels=model_channels // 8,
                 use_checkpoint=use_checkpoint,
             ),
             SparseSubdivideBlock3d(
                 channels=model_channels // 8,
-                resolution=resolution * 4,
                 out_channels=model_channels // 16,
                 use_checkpoint=use_checkpoint,
             )
@@ -168,7 +105,7 @@ class SparseSDFDecoder(SparseTransformerBase):
         self.out_layer = sp.SparseLinear(model_channels // 16, self.out_channels)
         self.out_active = sp.SparseTanh()
 
-        # self.initialize_weights()
+        self.initialize_weights()
         if use_fp16:
             self.convert_to_fp16()
 
@@ -193,17 +130,12 @@ class SparseSDFDecoder(SparseTransformerBase):
         self.upsample.apply(convert_module_to_f32)  
     
     @torch.no_grad()
-    def split_for_meshing(self, x: sp.SparseTensor, chunk_size=4, padding=4, verbose=False):
+    def split_for_meshing(self, x: sp.SparseTensor, chunk_size=4, padding=4):
         
         sub_resolution = self.resolution // chunk_size
         upsample_ratio = 8 # hard-coded here
         assert sub_resolution % padding == 0
         out = []
-        if verbose:
-            print(f"Input coords range: x[{x.coords[:, 1].min()}, {x.coords[:, 1].max()}], "
-                  f"y[{x.coords[:, 2].min()}, {x.coords[:, 2].max()}], "
-                  f"z[{x.coords[:, 3].min()}, {x.coords[:, 3].max()}]")
-            print(f"Resolution: {self.resolution}, sub_resolution: {sub_resolution}")
         
         for i in range(chunk_size):
             for j in range(chunk_size):
@@ -224,11 +156,6 @@ class SparseSDFDecoder(SparseTransformerBase):
                     orig_start_z = k * sub_resolution
                     orig_end_z = (k + 1) * sub_resolution
 
-                    if verbose:
-                        print(f"\nChunk ({i},{j},{k}):")
-                        print(f"Padded bounds: x[{start_x}, {end_x}], y[{start_y}, {end_y}], z[{start_z}, {end_z}]")
-                        print(f"Original bounds: x[{orig_start_x}, {orig_end_x}], y[{orig_start_y}, {orig_end_y}], z[{orig_start_z}, {orig_end_z}]")
-
                     mask = torch.logical_and(
                         torch.logical_and(
                             torch.logical_and(x.coords[:, 1] >= start_x, x.coords[:, 1] < end_x),
@@ -240,23 +167,13 @@ class SparseSDFDecoder(SparseTransformerBase):
                     if mask.sum() > 0:
                         # Get the coordinates and shift them to local space
                         coords = x.coords[mask].clone()
-                        if verbose:
-                            print(f"Before local shift - coords range: x[{coords[:, 1].min()}, {coords[:, 1].max()}], "
-                                f"y[{coords[:, 2].min()}, {coords[:, 2].max()}], "
-                                f"z[{coords[:, 3].min()}, {coords[:, 3].max()}]")
-                        
                         # Shift to local coordinates
                         coords[:, 1:] = coords[:, 1:] - torch.tensor([start_x, start_y, start_z], 
                                                                     device=coords.device).view(1, 3)
-                        if verbose:
-                            print(f"After local shift - coords range: x[{coords[:, 1].min()}, {coords[:, 1].max()}], "
-                                f"y[{coords[:, 2].min()}, {coords[:, 2].max()}], "
-                                f"z[{coords[:, 3].min()}, {coords[:, 3].max()}]")
 
                         chunk_tensor = sp.SparseTensor(x.feats[mask], coords)
                         # Store the boundaries and offsets as metadata for later reconstruction
                         chunk_tensor.bounds = {
-                            'padded': (start_x * upsample_ratio, end_x * upsample_ratio + (upsample_ratio - 1), start_y * upsample_ratio, end_y * upsample_ratio + (upsample_ratio - 1), start_z * upsample_ratio, end_z * upsample_ratio + (upsample_ratio - 1)),
                             'original': (orig_start_x * upsample_ratio, orig_end_x * upsample_ratio + (upsample_ratio - 1), orig_start_y * upsample_ratio, orig_end_y * upsample_ratio + (upsample_ratio - 1), orig_start_z * upsample_ratio, orig_end_z * upsample_ratio + (upsample_ratio - 1)),
                             'offsets': (start_x * upsample_ratio, start_y * upsample_ratio, start_z * upsample_ratio)  # Store offsets for reconstruction
                         }
@@ -265,18 +182,9 @@ class SparseSDFDecoder(SparseTransformerBase):
                     del mask
                     torch.cuda.empty_cache()
         return out
-
-    def upsamples(self, x):
-        dtype = x.dtype
-        for block in self.upsample:
-            x = block(x)
-        x = x.type(dtype)
-        x = self.out_layer(x)
-        x = self.out_active(x)
-        return x
     
     @torch.no_grad()
-    def split_single_chunk(self, x: sp.SparseTensor, chunk_size=4, padding=4, verbose=False):
+    def split_single_chunk(self, x: sp.SparseTensor, chunk_size=4, padding=4):
         sub_resolution = self.resolution // chunk_size
         upsample_ratio = 8 # hard-coded here
         assert sub_resolution % padding == 0
@@ -296,14 +204,6 @@ class SparseSDFDecoder(SparseTransformerBase):
             start_z = max(0, orig_start_z - padding)
             end_z = min(orig_end_z + padding, self.resolution)
 
-            # mask = torch.logical_and(
-            #     torch.logical_and(
-            #         torch.logical_and(x.coords[:, 1] >= start_x, x.coords[:, 1] < end_x),
-            #         torch.logical_and(x.coords[:, 2] >= start_y, x.coords[:, 2] < end_y)
-            #     ),
-            #     torch.logical_and(x.coords[:, 3] >= start_z, x.coords[:, 3] < end_z)
-            # )
-
             mask_ori = torch.logical_and(
                 torch.logical_and(
                     torch.logical_and(x.coords[:, 1] >= orig_start_x, x.coords[:, 1] < orig_end_x),
@@ -313,30 +213,17 @@ class SparseSDFDecoder(SparseTransformerBase):
             )
             mask_sum = mask_ori.sum()
 
-        # coords = x.coords[mask].clone()
-
-        # Shift to local coordinates
-        # coords[:, 1:] = coords[:, 1:] - torch.tensor([start_x, start_y, start_z], 
-        #                                             device=coords.device).view(1, 3)
-        
-        # chunk_tensor = sp.SparseTensor(x.feats[mask], coords)
-        # chunk_tensor = x
-        # chunk_tensor = x.replace(x.feats[mask], x.coords[mask])
         # Store the boundaries and offsets as metadata for later reconstruction
         bounds = {
-            'padded': (start_x * upsample_ratio, end_x * upsample_ratio + (upsample_ratio - 1), start_y * upsample_ratio, end_y * upsample_ratio + (upsample_ratio - 1), start_z * upsample_ratio, end_z * upsample_ratio + (upsample_ratio - 1)),
             'original': (orig_start_x * upsample_ratio, orig_end_x * upsample_ratio + (upsample_ratio - 1), orig_start_y * upsample_ratio, orig_end_y * upsample_ratio + (upsample_ratio - 1), orig_start_z * upsample_ratio, orig_end_z * upsample_ratio + (upsample_ratio - 1)),
             'start': (start_x, end_x, start_y, end_y, start_z, end_z),
             'offsets': (start_x * upsample_ratio, start_y * upsample_ratio, start_z * upsample_ratio)  # Store offsets for reconstruction
         }
         return bounds
     
-    def forward_chunk(self, x: sp.SparseTensor, padding=4):
-        chunk_size = 4
-        if x.coords.shape[0] < 80000:
-            chunk_size = 2
+    def forward_single_chunk(self, x: sp.SparseTensor, padding=4):
         
-        bounds = self.split_single_chunk(x, chunk_size, padding=padding, verbose=False)
+        bounds = self.split_single_chunk(x, self.chunk_size, padding=padding)
 
         start_x, end_x, start_y, end_y, start_z, end_z = bounds['start']
         mask = torch.logical_and(
@@ -387,11 +274,22 @@ class SparseSDFDecoder(SparseTransformerBase):
 
         return sp.SparseTensor(final_feats, final_coords)
 
+    def upsamples(self, x, return_feat: bool = False):
+        dtype = x.dtype
+        for block in self.upsample:
+            x = block(x)
+        x = x.type(dtype)
 
+        output = self.out_active(self.out_layer(x))
+
+        if return_feat:
+            return output, x
+        else:
+            return output
+    
     def forward(self, x: sp.SparseTensor, factor: float = None, return_feat: bool = False):
         h = super().forward(x, factor)
-
-        if x.coords.max() < 64:
+        if self.chunk_size <= 1:
             for block in self.upsample:
                 h = block(h)
             h = h.type(x.dtype)
@@ -404,16 +302,10 @@ class SparseSDFDecoder(SparseTransformerBase):
             return h
         else:
             if self.training:
-                # print('latent token number: ', x.coords.shape[0])
-                return self.forward_chunk(h)
+                return self.forward_single_chunk(h)
             else:
-                batch_size = x.shape[0]
-                chunk_size = 4
-                print('latent token number: ', x.coords.shape[0])
-                if x.coords.shape[0] < 80000:
-                    chunk_size = 2
-                
-                chunks = self.split_for_meshing(h, chunk_size=chunk_size, verbose=False)
+                batch_size = x.shape[0]                
+                chunks = self.split_for_meshing(h, chunk_size=self.chunk_size)
                 all_coords, all_feats = [], []
                 for chunk_idx, chunk in enumerate(chunks):
                     chunk_result = self.upsamples(chunk)
@@ -458,5 +350,4 @@ class SparseSDFDecoder(SparseTransformerBase):
                 final_feats = torch.cat(all_feats)
                 
                 return sp.SparseTensor(final_feats, final_coords)
-            
             

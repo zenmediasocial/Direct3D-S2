@@ -17,14 +17,6 @@ from direct3d_s2.utils import (
     mesh2index,
 )
 
-def compute_valid_udf(vertices, faces, dim=512, threshold=8.0):
-    if not faces.is_cuda or not vertices.is_cuda:
-        raise ValueError("Both maze and visited tensors must be CUDA tensors")
-    udf = torch.zeros(dim**3,device=vertices.device).int() + 10000000
-    n_faces = faces.shape[0]
-    import udf_extension
-    udf_extension.compute_valid_udf(vertices, faces, udf, n_faces, dim, threshold)
-    return udf.float()/10000000.
 
 class Direct3DS2Pipeline(object):
 
@@ -109,7 +101,7 @@ class Direct3DS2Pipeline(object):
         sparse_vae_1024.load_state_dict(state_dict_sparse_1024["vae"], strict=True)
         sparse_vae_1024.eval()
         sparse_dit_1024 = instantiate_from_config(cfg.sparse_dit_1024)
-        sparse_dit_1024.load_state_dict(state_dict_sparse_512["dit"], strict=True)
+        sparse_dit_1024.load_state_dict(state_dict_sparse_1024["dit"], strict=True)
         sparse_dit_1024.eval()
 
         state_dict_refiner = torch.load(model_refiner_path, map_location='cpu', weights_only=True)
@@ -197,7 +189,7 @@ class Direct3DS2Pipeline(object):
             latent_index: torch.Tensor = None,
             mode: str = 'dense', # 'dense', 'sparse512' or 'sparse1024
             remove_interior: bool = False,
-            mc_threshold: float = 0.0):
+            mc_threshold: float = 0.02):
         
         do_classifier_free_guidance = guidance_scale > 0
         if mode == 'dense':
@@ -250,14 +242,11 @@ class Direct3DS2Pipeline(object):
                 noise_pred = noise_pred_cond
             
             latents = scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
+        
         latents = 1. / vae.latents_scale * latents + vae.latents_shift
         
         if mode != 'dense':
             latents = sp.SparseTensor(latents, latent_index.int())
-
-        # if mode == 'sparse1024':
-        #     data = torch.load('/opt/ml/input/data/CFS/wushuang/Direct3D/data1.pt')
-        #     latents = sp.SparseTensor(data['x_feats'].cuda(), data['x_coords'].cuda())
 
         decoder_inputs = {
             "latents": latents,
@@ -273,6 +262,8 @@ class Direct3DS2Pipeline(object):
         outputs = vae.decode_mesh(**decoder_inputs)
 
         if remove_interior:
+            del latents, noise_pred, noise_pred_cond, noise_pred_uncond, x_input, cond, uncond
+            torch.cuda.empty_cache()
             outputs = self.refiner.run(*outputs, mc_threshold=mc_threshold*2.0)
 
         return outputs
@@ -289,7 +280,6 @@ class Direct3DS2Pipeline(object):
         mc_threshold: float = 0.2):
 
         image = self.prepare_image(image)
-        
         
         with torch.amp.autocast("cuda"):
             latent_index = self.inference(image, self.dense_vae, self.dense_dit, self.dense_image_encoder,
@@ -310,11 +300,9 @@ class Direct3DS2Pipeline(object):
                                   generator=generator, mode='sparse512', 
                                   mc_threshold=mc_threshold, latent_index=latent_index, 
                                   remove_interior=remove_interior, **sparse_512_sampler_params)[0]
-        """
-        import trimesh
-        mesh = trimesh.load('refine.obj')
-        """
+
         if sdf_resolution == 1024:
+            torch.cuda.empty_cache()
             mesh = normalize_mesh(mesh)
             latent_index = mesh2index(mesh, size=1024, factor=8)
             latent_index = sort_block(latent_index, self.sparse_dit_1024.selection_block_size)
