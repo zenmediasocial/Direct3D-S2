@@ -68,24 +68,13 @@ def image2mesh(
     pipe = Direct3DS2Pipeline.from_pretrained('weights/v1.1')
     pipe.to("cuda:0")
 
-    mesh = pipe(image, sdf_resolution=int(resolution), mc_threshold=0.2)["mesh"]
-
-    if simplify:
-        # simplify_ratio = 0.95
-        filled_mesh = postprocess_mesh(
-            vertices=mesh.vertices,
-            faces=mesh.faces,
-            simplify=True,
-            simplify_ratio=simplify_ratio,
-            fill_holes=False,
-            fill_holes_max_hole_size=0.04,
-            fill_holes_max_hole_nbe=int(250 * np.sqrt(1-simplify_ratio)),
-            fill_holes_resolution=1024,
-            fill_holes_num_views=1000,
-            debug=False,
-            verbose=True,
-        )
-        mesh = trimesh.Trimesh(vertices=filled_mesh[0], faces=filled_mesh[1])
+    mesh = pipe(
+        image, 
+        sdf_resolution=int(resolution), 
+        mc_threshold=0.2,
+        remesh=simplify,
+        simplify_ratio=simplify_ratio,
+    )["mesh"]
 
     mesh_path = os.path.join(output_path, f'{uid}.obj')
     mesh.export(
