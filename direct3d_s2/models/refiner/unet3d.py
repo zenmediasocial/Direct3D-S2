@@ -233,8 +233,8 @@ class ResnetBlock3D(nn.Module):
     def forward(self, input_tensor: torch.Tensor) -> torch.Tensor:
 
         hidden_states = input_tensor
-
-        hidden_states = self.norm1(hidden_states)
+        dtype = hidden_states.dtype
+        hidden_states = self.norm1(hidden_states.float()).to(dtype)
         hidden_states = self.nonlinearity(hidden_states)
 
         if self.upsample is not None:
@@ -249,8 +249,7 @@ class ResnetBlock3D(nn.Module):
 
         hidden_states = self.conv1(hidden_states)
 
-       
-        hidden_states = self.norm2(hidden_states)
+        hidden_states = self.norm2(hidden_states.float()).to(dtype)
 
         hidden_states = self.nonlinearity(hidden_states)
 
@@ -630,7 +629,8 @@ class UNet3DModel(nn.Module):
                     )
  
         if self.conv_norm_out:
-            sample = self.conv_norm_out(sample)
+            dtype = sample.dtype
+            sample = self.conv_norm_out(sample.float()).to(dtype)
             sample = self.conv_act(sample)
         if self.conv_out!=None:
             sample = self.conv_out(sample)

@@ -115,15 +115,14 @@ class SparseDiT(nn.Module):
         """
         Convert the torso of the model to float16.
         """
-        self.blocks.apply(convert_module_to_f16)
+        # self.blocks.apply(convert_module_to_f16)
+        self.apply(convert_module_to_f16)
 
     def convert_to_fp32(self) -> None:
         """
         Convert the torso of the model to float32.
         """
-        self.input_blocks.apply(convert_module_to_f32)
         self.blocks.apply(convert_module_to_f32)
-        self.out_blocks.apply(convert_module_to_f32)
 
     def initialize_weights(self) -> None:
         # Initialize transformer layers:

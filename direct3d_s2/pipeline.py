@@ -202,7 +202,7 @@ class Direct3DS2Pipeline(object):
 
         if mode == 'dense':
             latent_shape = (batch_size, *dit.latent_shape)
-        elif mode in ['sparse512', 'sparse1024']:
+        else:
             latent_shape = (len(latent_index), dit.out_channels)
         latents = torch.randn(latent_shape, dtype=self.dtype, device=self.device, generator=generator)
 
@@ -277,13 +277,14 @@ class Direct3DS2Pipeline(object):
         sparse_512_sampler_params: dict = {'num_inference_steps': 30, 'guidance_scale': 7.0},
         sparse_1024_sampler_params: dict = {'num_inference_steps': 15, 'guidance_scale': 7.0},
         generator: Optional[torch.Generator] = None,
+        remesh: bool = False,
+        simplify_ratio: float = 0.95,
         mc_threshold: float = 0.2):
 
         image = self.prepare_image(image)
         
-        with torch.amp.autocast("cuda"):
-            latent_index = self.inference(image, self.dense_vae, self.dense_dit, self.dense_image_encoder,
-                                        self.dense_scheduler, generator=generator, mode='dense', mc_threshold=0.1, **dense_sampler_params)[0]
+        latent_index = self.inference(image, self.dense_vae, self.dense_dit, self.dense_image_encoder,
+                                    self.dense_scheduler, generator=generator, mode='dense', mc_threshold=0.1, **dense_sampler_params)[0]
         
         latent_index = sort_block(latent_index, self.sparse_dit_512.selection_block_size)
 
@@ -294,24 +295,37 @@ class Direct3DS2Pipeline(object):
         else:
             remove_interior = True
 
-        with torch.amp.autocast("cuda"):
-            mesh = self.inference(image, self.sparse_vae_512, self.sparse_dit_512, 
-                                  self.sparse_image_encoder, self.sparse_scheduler_512, 
-                                  generator=generator, mode='sparse512', 
-                                  mc_threshold=mc_threshold, latent_index=latent_index, 
-                                  remove_interior=remove_interior, **sparse_512_sampler_params)[0]
+        mesh = self.inference(image, self.sparse_vae_512, self.sparse_dit_512, 
+                                self.sparse_image_encoder, self.sparse_scheduler_512, 
+                                generator=generator, mode='sparse512', 
+                                mc_threshold=mc_threshold, latent_index=latent_index, 
+                                remove_interior=remove_interior, **sparse_512_sampler_params)[0]
 
         if sdf_resolution == 1024:
+            del latent_index
             torch.cuda.empty_cache()
             mesh = normalize_mesh(mesh)
             latent_index = mesh2index(mesh, size=1024, factor=8)
             latent_index = sort_block(latent_index, self.sparse_dit_1024.selection_block_size)
-            with torch.amp.autocast("cuda"):
-                mesh = self.inference(image, self.sparse_vae_1024, self.sparse_dit_1024, 
-                                  self.sparse_image_encoder, self.sparse_scheduler_1024, 
-                                  generator=generator, mode='sparse1024', 
-                                  mc_threshold=mc_threshold, latent_index=latent_index, 
-                                  **sparse_1024_sampler_params)[0]
+            print(f"number of latent tokens: {len(latent_index)}")
+
+            mesh = self.inference(image, self.sparse_vae_1024, self.sparse_dit_1024, 
+                                self.sparse_image_encoder, self.sparse_scheduler_1024, 
+                                generator=generator, mode='sparse1024', 
+                                mc_threshold=mc_threshold, latent_index=latent_index, 
+                                **sparse_1024_sampler_params)[0]
+            
+        if remesh:
+            import trimesh
+            from direct3d_s2.utils import postprocess_mesh
+            filled_mesh = postprocess_mesh(
+                vertices=mesh.vertices,
+                faces=mesh.faces,
+                simplify=True,
+                simplify_ratio=simplify_ratio,
+                verbose=True,
+            )
+            mesh = trimesh.Trimesh(filled_mesh[0], filled_mesh[1])
 
         outputs = {"mesh": mesh}
 

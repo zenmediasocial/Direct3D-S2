@@ -275,8 +275,9 @@ class SparseStructureDecoder(nn.Module):
         """
         self.use_fp16 = True
         self.dtype = torch.float16
-        self.blocks.apply(convert_module_to_f16)
-        self.middle_block.apply(convert_module_to_f16)
+        # self.blocks.apply(convert_module_to_f16)
+        # self.middle_block.apply(convert_module_to_f16)
+        self.apply(convert_module_to_f16)
 
     def convert_to_fp32(self) -> None:
         """

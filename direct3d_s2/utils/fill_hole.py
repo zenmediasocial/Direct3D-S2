@@ -6,7 +6,6 @@ from pymeshfix import _meshfix
 import igraph
 import pyvista as pv
 
-
 PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
 
 def radical_inverse(base, n):
@@ -217,9 +216,9 @@ def _fill_holes(
 def postprocess_mesh(
     vertices: np.array,
     faces: np.array,
-    simplify: bool = True,
+    simplify: bool = False,
     simplify_ratio: float = 0.9,
-    fill_holes: bool = True,
+    fill_holes: bool = False,
     fill_holes_max_hole_size: float = 0.04,
     fill_holes_max_hole_nbe: int = 32,
     fill_holes_resolution: int = 1024,

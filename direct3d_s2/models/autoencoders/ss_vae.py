@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import trimesh
-from michelangelo.utils.mesh import process_mesh
 from skimage import measure
 
 from ...modules import sparse as sp

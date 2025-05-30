@@ -7,7 +7,7 @@ class BiRefNet(object):
     def __init__(self, device):
         from transformers import AutoModelForImageSegmentation
         self.birefnet_model = AutoModelForImageSegmentation.from_pretrained(
-            '/opt/ml/input/data/CFS/wushuang/bak_and_others/huggingface/hub/BiRefNet',
+            'ZhengPeng7/BiRefNet',
             trust_remote_code=True,
         ).to(device)
         self.birefnet_model.eval()

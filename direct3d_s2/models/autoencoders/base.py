@@ -90,7 +90,8 @@ class SparseTransformerBase(nn.Module):
         """
         Convert the torso of the model to float16.
         """
-        self.blocks.apply(convert_module_to_f16)
+        # self.blocks.apply(convert_module_to_f16)
+        self.apply(convert_module_to_f16)
 
     def convert_to_fp32(self) -> None:
         """

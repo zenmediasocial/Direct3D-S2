@@ -48,6 +48,7 @@ class TimestepEmbedder(nn.Module):
 
     def forward(self, t):
         t_freq = self.timestep_embedding(t, self.frequency_embedding_size)
+        t_freq = t_freq.to(self.mlp[0].weight.dtype)
         t_emb = self.mlp(t_freq)
         return t_emb
 
@@ -141,7 +142,8 @@ class DenseDiT(nn.Module):
         """
         Convert the torso of the model to float16.
         """
-        self.blocks.apply(convert_module_to_f16)
+        # self.blocks.apply(convert_module_to_f16)
+        self.apply(convert_module_to_f16)
 
     def convert_to_fp32(self) -> None:
         """

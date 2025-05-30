@@ -4,11 +4,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .unet3d import UNet3DModel
-import os
-import numpy as np
 import trimesh
 from tqdm import tqdm
 from skimage import measure
+from ...modules.utils import convert_module_to_f16, convert_module_to_f32
 
 
 def adaptive_conv(inputs,weights):
@@ -71,7 +70,8 @@ class Voxel_RefinerXL(nn.Module):
                 layers_mid_block: int = 2,
                 patch_size: int = 192,
                 res: int = 512,
-                use_checkpoint: bool=False):
+                use_checkpoint: bool=False,
+                use_fp16: bool = False):
 
         super().__init__()
 
@@ -93,6 +93,18 @@ class Voxel_RefinerXL(nn.Module):
         self.conv_out = nn.Conv3d(8, out_channels, kernel_size=3, padding=1)
         self.patch_size = patch_size
         self.res = res
+
+        self.use_fp16 = use_fp16
+        self.dtype = torch.float16 if use_fp16 else torch.float32
+        if use_fp16:
+            self.convert_to_fp16()
+
+    def convert_to_fp16(self) -> None:
+        """
+        Convert the torso of the model to float16.
+        """
+        # self.blocks.apply(convert_module_to_f16)
+        self.apply(convert_module_to_f16)
 
     def run(self,
             reconst_x,
