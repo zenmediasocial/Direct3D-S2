@@ -35,7 +35,15 @@ Generating high-resolution 3D shapes using volumetric representations such as Si
 
 ### Installation
 
-```sh
+- Install `pytorch >= 2.1.0` and `torchvision` first. You can refer to the [official installation guide](https://pytorch.org/get-started/locally/) for more details.
+
+```bash
+python -m pip install torch torchvision
+```
+
+- Install dependencies:
+
+```bash
 git clone https://github.com/DreamTechAI/Direct3D-S2.git
 
 cd Direct3D-S2
