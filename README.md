@@ -15,7 +15,7 @@
 ---
 
 ## ✨ News
-
+- June 3, 2025: We are preparing the v1.2 release, featuring enhanced character generation. Stay tuned!
 - May 30, 2025: 🤯 We have released both v1.0 and v1.1. The new model offers even greater speed compared to FlashAttention-2, with **12.2×** faster forward pass and **19.7×** faster backward pass, resulting in nearly **2×** inference speedup over v1.0.
 - May 30, 2025: 🔨 Release inference code and model.
 - May 26, 2025: 🎁 Release live demo on 🤗 [Hugging Face](https://huggingface.co/spaces/wushuang98/Direct3D-S2-v1.0-demo).
