@@ -35,11 +35,25 @@ Generating high-resolution 3D shapes using volumetric representations such as Si
 
 ### Installation
 
-- Install `pytorch >= 2.1.0` and `torchvision` first. You can refer to the [official installation guide](https://pytorch.org/get-started/locally/) for more details.
+### ✅ Tested Environment
 
-```bash
-python -m pip install torch torchvision
-```
+> 💡 *If you're setting up on Windows, check out [issue #11](https://github.com/DreamTechAI/Direct3D-S2/issues/11) and [issue #12](https://github.com/DreamTechAI/Direct3D-S2/issues/12). Big thanks to the contributors who helped get Direct3D-S2 working on Windows!*
+
+- **System**: Ubuntu 22.04  
+- **CUDA Toolkit**: [CUDA 12.1](https://developer.nvidia.com/cuda-12-1-0-download-archive)  
+- **PyTorch**: Install `torch` and `torchvision` first.  
+  Make sure the PyTorch CUDA version matches your installed CUDA Toolkit.
+
+  ```bash
+  pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu121
+  ```
+- **Torchsparse**
+  follow the [offical guide](https://github.com/mit-han-lab/torchsparse) or:
+  
+  ```bash
+  git clone https://github.com/mit-han-lab/torchsparse
+  cd torchsparse && python -m pip install .
+  ```
 
 - Install dependencies:
 
@@ -56,12 +70,15 @@ pip install -e .
 
 ### Usage
 
+> Note: Generating at 512 resolution requires at least 10GB of VRAM, and 1024 resolution needs around 24GB. We don’t recommend generating models at 512 resolution, as it’s just an intermediate step of the 1024 model and the quality is noticeably lower.
+
 ```python
 from direct3d_s2.pipeline import Direct3DS2Pipeline
 pipeline = Direct3DS2Pipeline.from_pretrained(
   'wushuang98/Direct3D-S2', 
   subfolder="direct3d-s2-v-1-1"
-).to("cuda:0")
+)
+pipeline.to("cuda:0")
 
 mesh = pipeline(
   'assets/test/13.png', 
