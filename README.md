@@ -47,7 +47,7 @@ Generating high-resolution 3D shapes using volumetric representations such as Si
   ```bash
   pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu121
   ```
-- **Torchsparse**
+- **Torchsparse**:
   follow the [offical guide](https://github.com/mit-han-lab/torchsparse) or:
   
   ```bash
@@ -57,16 +57,16 @@ Generating high-resolution 3D shapes using volumetric representations such as Si
 
 - Install dependencies:
 
-```bash
-git clone https://github.com/DreamTechAI/Direct3D-S2.git
-
-cd Direct3D-S2
-
-pip install -r requirements.txt
-
-pip install -e .
-
-```
+  ```bash
+  git clone https://github.com/DreamTechAI/Direct3D-S2.git
+  
+  cd Direct3D-S2
+  
+  pip install -r requirements.txt
+  
+  pip install -e .
+  
+  ```
 
 ### Usage
 
