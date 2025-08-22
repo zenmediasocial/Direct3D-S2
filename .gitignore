@@ -9,3 +9,5 @@ output
 outputs
 .gradio
 *.so
+omega/models/base.en.pt
+omega/models/whisper-base.en.pt
