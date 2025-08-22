@@ -1,0 +1,20 @@
+version: "3.9"
+
+services:
+  omega-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.omegabrick
+    container_name: omega-dev
+    privileged: true
+    network_mode: host
+    volumes:
+      - ./flask_app:/flask_app
+      - ./models:/models
+      - ./workspace:/workspace
+    environment:
+      FLASK_APP: app.py
+      FLASK_ENV: development
+    stdin_open: true
+    tty: true
+
